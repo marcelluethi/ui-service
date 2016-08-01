@@ -1,7 +1,7 @@
 import com.twitter.scrooge.ScroogeSBT
 
 
-name := "ui-server"
+name := "ui-service"
 
 version := "0.0.1"
 
@@ -14,7 +14,7 @@ resolvers ++= Seq("scalismo (private)" at "https://statismo.cs.unibas.ch/reposit
 credentials += Credentials(Path.userHome / ".ivy2" / ".credentials-statismo-private")
 
 libraryDependencies ++= Seq(
-  "ch.unibas.cs.gravis" %% "scalismo-ui" % "0.9.+",
+  "ch.unibas.cs.gravis" %% "scalismo-ui" % "develop-SNAPSHOT",
   "ch.unibas.cs.gravis" % "scalismo-native-all" % "3.0.+",
   "com.twitter" %% "scrooge-core" % "4.6.0",
   "org.apache.thrift" % "libthrift" % "0.8.0",

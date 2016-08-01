@@ -4,14 +4,17 @@ import breeze.linalg.{DenseMatrix, DenseVector}
 import com.twitter.finagle.ListeningServer
 import com.twitter.finagle.Thrift
 import com.twitter.util.{Await, Future, Promise}
+import org.apache.commons.math3.geometry.euclidean.threed.PolyhedronsSet.TranslationTransform
 import scalismo.common.{DiscreteVectorField, PointId, UnstructuredPointsDomain}
 import scalismo.geometry.{IntVector3D, Point3D, Vector3D, _3D}
 import scalismo.image.{DiscreteImageDomain, DiscreteScalarImage}
 import scalismo.mesh._
+import scalismo.registration
+import scalismo.registration.{RigidTransformation, RotationTransform}
 import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess.Eigenpair
 import scalismo.statisticalmodel.{DiscreteLowRankGaussianProcess, StatisticalMeshModel}
-import scalismo.ui.api.{Group, ScalismoUI}
-import thrift.{StatisticalShapeModel, Ui, Group => TGroup, Image => TImage, Point3D => TPoint3D, TriangleMesh => TTriangleMesh}
+import scalismo.ui.api.{Group, ScalismoUI, ShapeModelTransformationView}
+import thrift.{Ui, EulerTransform => TEulerTransform, Group => TGroup, Image => TImage, Point3D => TPoint3D, RigidTransformation => TRigidTransformation, ShapeModelTransformationView => TShapeModelTransformationView, ShapeTransformation => TShapeTransformation, StatisticalShapeModel => TStatisticalShapeModel, TranslationTransform => TTranslationTransform, TriangleMesh => TTriangleMesh}
 
 import scala.collection.mutable
 
@@ -22,6 +25,7 @@ object FinagleThriftServerSampleApp extends App {
 
   // maps group ids (here encoded as int) to Groups
   val groupMap = mutable.HashMap[Int, Group]()
+  val shapeModelTransformViewMap = mutable.HashMap[Int, ShapeModelTransformationView]()
 
   // The server part is easy in this sample, so let's just
   // create a simple implementation
@@ -69,7 +73,7 @@ object FinagleThriftServerSampleApp extends App {
       v
     }
 
-    override def showStatisticalShapeModel(g: TGroup, ssm: StatisticalShapeModel, name: String): Future[Unit] = {
+    override def showStatisticalShapeModel(g: TGroup, ssm: TStatisticalShapeModel, name: String): Future[TShapeModelTransformationView] = {
 
       val pts = ssm.reference.vertices.map(tp => scalismo.geometry.Point3D(tp.x, tp.y, tp.z))
       val cells = ssm.reference.topology.map(c => TriangleCell(PointId(c.id1), PointId(c.id2), PointId(c.id3)))
@@ -95,10 +99,51 @@ object FinagleThriftServerSampleApp extends App {
       val dgp = DiscreteLowRankGaussianProcess(meanField,  eigenPairs)
 
 
-      ui.show(groupMap(g.id), StatisticalMeshModel(refMesh, dgp), name)
+      val ssmView = ui.show(groupMap(g.id), StatisticalMeshModel(refMesh, dgp), name)
+
+      val tvview : TShapeModelTransformationView = new TShapeModelTransformationView {
+        override def id: Int = (g.name + name).hashCode()
+
+        override def poseTransformation: TRigidTransformation = {
+          new TRigidTransformation {
+            override def rotation: TEulerTransform = new TEulerTransform {
+              override def angleX: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.parameters(0)
+              override def angleY: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.parameters(1)
+              override def angleZ: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.parameters(2)
+
+              override def center: TPoint3D = new TPoint3D {
+                override def x: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.center.x
+                override def y: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.center.y
+                override def z: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.center.z
+              }
+            }
+            override def translation: TTranslationTransform = new TTranslationTransform {
+              override def x: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.translation.parameters(0)
+              override def y: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.translation.parameters(1)
+              override def z: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.translation.parameters(2)
+            }
+          }
+        }
+
+        override def shapeTransformation: TShapeTransformation = new TShapeTransformation {
+          override def coefficients: Seq[Double] = ssmView.shapeModelTransformationView.shapeTransformationView.coefficients.toArray.toSeq
+        }
+      }
+      shapeModelTransformViewMap.update(tvview.id, ssmView.shapeModelTransformationView)
+      Future.value(tvview)
+
+    }
+
+    override def updateShapeModelTransformation(smtv: TShapeModelTransformationView): Future[Unit] = {
+      val shapeModelTransformView = shapeModelTransformViewMap(smtv.id)
+      shapeModelTransformView.shapeTransformationView.coefficients = DenseVector(smtv.shapeTransformation.coefficients.toArray)
+      val center : scalismo.geometry.Point3D = Point3D(smtv.poseTransformation.rotation.center.x,smtv.poseTransformation.rotation.center.y, smtv.poseTransformation.rotation.center.z)
+      val rotation = RotationTransform(phi = smtv.poseTransformation.rotation.angleX, psi = smtv.poseTransformation.rotation.angleY, theta = smtv.poseTransformation.rotation.angleZ, centre = center)
+      val translation = registration.TranslationTransform(Vector3D(smtv.poseTransformation.translation.x, smtv.poseTransformation.translation.y, smtv.poseTransformation.translation.z))
+      val rigidTransformation = RigidTransformation(rotation, translation)
+      shapeModelTransformView.poseTransformationView.transformation = rigidTransformation;
 
       Future.value(())
-
     }
   }
 
