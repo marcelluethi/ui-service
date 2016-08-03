@@ -50,7 +50,6 @@ object FinagleThriftServerSampleApp extends App {
       val origin = Point3D(img.domain.origin.x, img.domain.origin.y, img.domain.origin.z)
       val size = IntVector3D(img.domain.size.i, img.domain.size.j, img.domain.size.k)
       val spacing = Vector3D(img.domain.spacing.x, img.domain.spacing.y, img.domain.spacing.z)
-
       val domain = DiscreteImageDomain(origin, spacing,size)
       val values = img.data.toIndexedSeq
       val discreteImage = DiscreteScalarImage(domain, values)
@@ -107,9 +106,10 @@ object FinagleThriftServerSampleApp extends App {
         override def poseTransformation: TRigidTransformation = {
           new TRigidTransformation {
             override def rotation: TEulerTransform = new TEulerTransform {
-              override def angleX: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.parameters(0)
+              // we have rotation around z, y, x in scalismo
+              override def angleX: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.parameters(2)
               override def angleY: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.parameters(1)
-              override def angleZ: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.parameters(2)
+              override def angleZ: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.parameters(0)
 
               override def center: TPoint3D = new TPoint3D {
                 override def x: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.center.x
@@ -138,9 +138,11 @@ object FinagleThriftServerSampleApp extends App {
       val shapeModelTransformView = shapeModelTransformViewMap(smtv.id)
       shapeModelTransformView.shapeTransformationView.coefficients = DenseVector(smtv.shapeTransformation.coefficients.toArray)
       val center : scalismo.geometry.Point3D = Point3D(smtv.poseTransformation.rotation.center.x,smtv.poseTransformation.rotation.center.y, smtv.poseTransformation.rotation.center.z)
-      val rotation = RotationTransform(phi = smtv.poseTransformation.rotation.angleX, psi = smtv.poseTransformation.rotation.angleY, theta = smtv.poseTransformation.rotation.angleZ, centre = center)
+      // the rotation parameters are ordered z y x in scalismo
+      val rotation = RotationTransform(smtv.poseTransformation.rotation.angleZ,smtv.poseTransformation.rotation.angleY, smtv.poseTransformation.rotation.angleX, centre = center)
+      println("translation: " + smtv.poseTransformation.translation)
       val translation = registration.TranslationTransform(Vector3D(smtv.poseTransformation.translation.x, smtv.poseTransformation.translation.y, smtv.poseTransformation.translation.z))
-      val rigidTransformation = RigidTransformation(rotation, translation)
+      val rigidTransformation = RigidTransformation(translation, rotation)
       shapeModelTransformView.poseTransformationView.transformation = rigidTransformation;
 
       Future.value(())
