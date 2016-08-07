@@ -1,6 +1,5 @@
 import com.twitter.scrooge.ScroogeSBT
 
-
 name := "ui-service"
 
 version := "0.0.1"
@@ -18,11 +17,9 @@ libraryDependencies ++= Seq(
   "ch.unibas.cs.gravis" % "scalismo-native-all" % "3.0.+",
   "com.twitter" %% "scrooge-core" % "4.6.0",
   "org.apache.thrift" % "libthrift" % "0.8.0",
-   "com.twitter" %% "finagle-thrift" % "6.34.0")
+   "com.twitter" %% "finagle-thrift" % "6.34.0"
+   )
 
 
 
 scroogeBuildOptions := Seq("--finagle", "--verbose")
-
-
-

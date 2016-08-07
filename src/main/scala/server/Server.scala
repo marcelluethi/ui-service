@@ -6,15 +6,15 @@ import com.twitter.finagle.Thrift
 import com.twitter.util.{Await, Future, Promise}
 import org.apache.commons.math3.geometry.euclidean.threed.PolyhedronsSet.TranslationTransform
 import scalismo.common.{DiscreteVectorField, PointId, UnstructuredPointsDomain}
-import scalismo.geometry.{IntVector3D, Point3D, Vector3D, _3D}
+import scalismo.geometry._
 import scalismo.image.{DiscreteImageDomain, DiscreteScalarImage}
 import scalismo.mesh._
 import scalismo.registration
 import scalismo.registration.{RigidTransformation, RotationTransform}
 import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess.Eigenpair
-import scalismo.statisticalmodel.{DiscreteLowRankGaussianProcess, StatisticalMeshModel}
+import scalismo.statisticalmodel.{MultivariateNormalDistribution, DiscreteLowRankGaussianProcess, StatisticalMeshModel}
 import scalismo.ui.api.{Group, ScalismoUI, ShapeModelTransformationView}
-import thrift.{Ui, EulerTransform => TEulerTransform, Group => TGroup, Image => TImage, Point3D => TPoint3D, RigidTransformation => TRigidTransformation, ShapeModelTransformationView => TShapeModelTransformationView, ShapeTransformation => TShapeTransformation, StatisticalShapeModel => TStatisticalShapeModel, TranslationTransform => TTranslationTransform, TriangleMesh => TTriangleMesh}
+import thrift.{Ui, EulerTransform => TEulerTransform, Group => TGroup, Image => TImage, Point3D => TPoint3D, RigidTransformation => TRigidTransformation, ShapeModelTransformationView => TShapeModelTransformationView, ShapeTransformation => TShapeTransformation, StatisticalShapeModel => TStatisticalShapeModel, TranslationTransform => TTranslationTransform, TriangleMesh => TTriangleMesh, Landmark => TLandmark}
 
 import scala.collection.mutable
 
@@ -36,7 +36,36 @@ object FinagleThriftServerSampleApp extends App {
 
       ui.show(groupMap(g.id), uipts.toIndexedSeq, name)
       Future.value(())
-}
+    }
+
+    override def showLandmark(g : TGroup, tlm: TLandmark, name : String): Future[Unit] = {
+      val pt = Point3D(tlm.point.x, tlm.point.y, tlm.point.z)
+
+      val pc1 = DenseVector.zeros[Double](3);
+      pc1(0) = tlm.uncertainty.principalAxis1.x;
+      pc1(1) = tlm.uncertainty.principalAxis1.y;
+      pc1(2) = tlm.uncertainty.principalAxis1.z;
+      val pc2 = DenseVector.zeros[Double](3);
+      pc2(0) = tlm.uncertainty.principalAxis2.x;
+      pc2(1) = tlm.uncertainty.principalAxis2.y;
+      pc2(2) = tlm.uncertainty.principalAxis2.z;
+      val pc3 = DenseVector.zeros[Double](3);
+      pc3(0) = tlm.uncertainty.principalAxis3.x;
+      pc3(1) = tlm.uncertainty.principalAxis3.y;
+      pc3(2) = tlm.uncertainty.principalAxis3.z;
+
+      val mean = DenseVector.zeros[Double](3)
+      val principalComponents =       Seq((pc1, tlm.uncertainty.variances.x),
+        (pc2, tlm.uncertainty.variances.y),
+      (pc3, tlm.uncertainty.variances.z))
+
+      val uncertainty = MultivariateNormalDistribution(mean, principalComponents)
+      val lm = Landmark(tlm.name, pt, None, Some(uncertainty))//p.map(tp => scalismo.geometry.Point3D(tp.x, tp.y, tp.z))
+
+      ui.show(groupMap(g.id),lm, name)
+      Future.value(())
+    }
+
 
     override def showTriangleMesh(g : TGroup, m: TTriangleMesh, name : String): Future[Unit] = {
       val pts = m.vertices.map(tp => scalismo.geometry.Point3D(tp.x, tp.y, tp.z))

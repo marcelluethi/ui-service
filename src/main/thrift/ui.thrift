@@ -1,6 +1,11 @@
 
 namespace cpp ui // The generated c++ code will be put inside example namespace
 
+typedef list<double> DoubleVector
+
+typedef list<DoubleVector> ListOfDoubleVectors
+
+
 struct Group {
     1: required i32 id;
     2: required string name;
@@ -24,14 +29,29 @@ struct IntVector3D {
     3: required i32 k;
 }
 
-typedef list<Point3D> PointList
 
+struct UncertaintyCovariance {
+    1: required Vector3D variances;
+    2: required Vector3D principalAxis1;
+    3: required Vector3D principalAxis2;
+    4: required Vector3D principalAxis3;
+}
+
+struct Landmark {
+    1: required string name;
+    2: required Point3D point;
+    3: required UncertaintyCovariance uncertainty;
+}
+
+typedef list<Point3D> PointList
 
 struct TriangleCell {
     1: required i32 id1;
     2: required i32 id2;
     3: required i32 id3;
 }
+
+
 
 
 typedef list<TriangleCell> TriangleCellList
@@ -55,9 +75,8 @@ struct Image {
     2: required ImageData data;
 }
 
-typedef list<double> DoubleVector
 
-typedef list<DoubleVector> ListOfDoubleVectors
+
 
 struct KLBasis {
     1: required DoubleVector eigenvalues
@@ -105,8 +124,11 @@ service UI {
   void showPointCloud(1: Group g, 2:PointList p, 3:string name);
   void showTriangleMesh(1: Group g, 2:TriangleMesh m, 3:string name);
   void showImage(1: Group g, 2:Image img, 3:string name);
-  ShapeModelTransformationView showStatisticalShapeModel(1 : Group g, 2:StatisticalShapeModel ssm, 3:string name)
-  void updateShapeModelTransformation(1: ShapeModelTransformationView smtv)
+  void showLandmark(1 : Group g, 2 : Landmark landmark, 3 : string name);
+  ShapeModelTransformationView showStatisticalShapeModel(1 : Group g, 2:StatisticalShapeModel ssm, 3:string name);
+  void updateShapeModelTransformation(1: ShapeModelTransformationView smtv);
+
+
 }
 
 
