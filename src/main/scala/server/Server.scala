@@ -13,8 +13,8 @@ import scalismo.registration
 import scalismo.registration.{RigidTransformation, RotationTransform}
 import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess.Eigenpair
 import scalismo.statisticalmodel.{MultivariateNormalDistribution, DiscreteLowRankGaussianProcess, StatisticalMeshModel}
-import scalismo.ui.api.{Group, ScalismoUI, ShapeModelTransformationView}
-import thrift.{Ui, EulerTransform => TEulerTransform, Group => TGroup, Image => TImage, Point3D => TPoint3D, RigidTransformation => TRigidTransformation, ShapeModelTransformationView => TShapeModelTransformationView, ShapeTransformation => TShapeTransformation, StatisticalShapeModel => TStatisticalShapeModel, TranslationTransform => TTranslationTransform, TriangleMesh => TTriangleMesh, Landmark => TLandmark}
+import scalismo.ui.api._
+import thrift.{EulerTransform => TEulerTransform, Group => TGroup, Image => TImage, Point3D => TPoint3D, RigidTransformation => TRigidTransformation, ShapeModelTransformationView => TShapeModelTransformationView, ShapeTransformation => TShapeTransformation, StatisticalShapeModel => TStatisticalShapeModel, TranslationTransform => TTranslationTransform, TriangleMesh => TTriangleMesh, Landmark => TLandmark, ShapeModelView => TShapeModelView, Color => TColor, ImageView => TImageView, TriangleMeshView => TTriangleMeshView, Ui}
 
 import scala.collection.mutable
 
@@ -26,10 +26,32 @@ object FinagleThriftServerSampleApp extends App {
   // maps group ids (here encoded as int) to Groups
   val groupMap = mutable.HashMap[Int, Group]()
   val shapeModelTransformViewMap = mutable.HashMap[Int, ShapeModelTransformationView]()
+  val meshViewMap = mutable.HashMap[Int, TriangleMeshView]()
+  val imageViewMap = mutable.HashMap[Int, ImageView]()
 
   // The server part is easy in this sample, so let's just
   // create a simple implementation
   val service = new Ui[Future] {
+
+
+
+    def meshViewtoThriftMeshView(id : Int, meshView : TriangleMeshView) : TTriangleMeshView = {
+      val assignedId = id
+
+      new TTriangleMeshView {
+        override def opacity: Double = meshView.opacity
+
+        override def color: TColor = new TColor {
+          val meshcolor = meshView.color
+          override def r: Int = meshcolor.getRed
+          override def b: Int = meshcolor.getBlue
+          override def g: Int = meshcolor.getGreen
+        }
+
+        override def id: Int = assignedId
+      }
+    }
+
 
     override def showPointCloud(g : TGroup, p: Seq[TPoint3D], name : String): Future[Unit] = {
       val uipts = p.map(tp => scalismo.geometry.Point3D(tp.x, tp.y, tp.z))
@@ -67,23 +89,42 @@ object FinagleThriftServerSampleApp extends App {
     }
 
 
-    override def showTriangleMesh(g : TGroup, m: TTriangleMesh, name : String): Future[Unit] = {
+    override def showTriangleMesh(g : TGroup, m: TTriangleMesh, name : String): Future[TTriangleMeshView] = {
       val pts = m.vertices.map(tp => scalismo.geometry.Point3D(tp.x, tp.y, tp.z))
       val cells = m.topology.map(c => TriangleCell(PointId(c.id1), PointId(c.id2), PointId(c.id3)))
       val mesh = TriangleMesh3D(UnstructuredPointsDomain(pts.toIndexedSeq), TriangleList(cells.toIndexedSeq))
-      ui.show(groupMap(g.id), mesh, name)
-      Future.value(())
+      val meshView = ui.show(groupMap(g.id), mesh, name)
+
+      val id: Int = (g.name + name).hashCode()
+
+      val tMeshView = meshViewtoThriftMeshView(id, meshView)
+      meshViewMap.update(id, meshView)
+
+      Future.value(tMeshView)
     }
 
-    override def showImage(g : TGroup, img: TImage, name : String): Future[Unit] = {
+    override def showImage(g : TGroup, img: TImage, name : String): Future[TImageView] = {
       val origin = Point3D(img.domain.origin.x, img.domain.origin.y, img.domain.origin.z)
       val size = IntVector3D(img.domain.size.i, img.domain.size.j, img.domain.size.k)
       val spacing = Vector3D(img.domain.spacing.x, img.domain.spacing.y, img.domain.spacing.z)
       val domain = DiscreteImageDomain(origin, spacing,size)
       val values = img.data.toIndexedSeq
       val discreteImage = DiscreteScalarImage(domain, values)
-      ui.show(groupMap(g.id), discreteImage, name)
-      Future.value(())
+      val imageView = ui.show(groupMap(g.id), discreteImage, name)
+
+      val assignedId: Int = (g.name + name).hashCode()
+
+      imageViewMap.update(assignedId, imageView)
+
+      val tImageView : TImageView = new TImageView {
+        override def level: Int = 10
+
+        override def window: Int = 10
+
+        override def id: Int = assignedId
+      }
+
+      Future.value(tImageView)
     }
 
     override def createGroup(name: String): Future[TGroup] = {
@@ -101,7 +142,7 @@ object FinagleThriftServerSampleApp extends App {
       v
     }
 
-    override def showStatisticalShapeModel(g: TGroup, ssm: TStatisticalShapeModel, name: String): Future[TShapeModelTransformationView] = {
+    override def showStatisticalShapeModel(g: TGroup, ssm: TStatisticalShapeModel, name: String): Future[TShapeModelView] = {
 
       val pts = ssm.reference.vertices.map(tp => scalismo.geometry.Point3D(tp.x, tp.y, tp.z))
       val cells = ssm.reference.topology.map(c => TriangleCell(PointId(c.id1), PointId(c.id2), PointId(c.id3)))
@@ -127,7 +168,8 @@ object FinagleThriftServerSampleApp extends App {
       val dgp = DiscreteLowRankGaussianProcess(meanField,  eigenPairs)
 
 
-      val ssmView = ui.show(groupMap(g.id), StatisticalMeshModel(refMesh, dgp), name)
+      val ssmView   = ui.show(groupMap(g.id), StatisticalMeshModel(refMesh, dgp), name)
+
 
       val tvview : TShapeModelTransformationView = new TShapeModelTransformationView {
         override def id: Int = (g.name + name).hashCode()
@@ -158,8 +200,20 @@ object FinagleThriftServerSampleApp extends App {
           override def coefficients: Seq[Double] = ssmView.shapeModelTransformationView.shapeTransformationView.coefficients.toArray.toSeq
         }
       }
+
+      val meshId: Int = (g.name + name).hashCode()
+
+      val tMeshView = meshViewtoThriftMeshView(meshId, ssmView.meshView)
+      meshViewMap.update(meshId, ssmView.meshView)
+
+
+      val tssmview : TShapeModelView = new TShapeModelView {
+        override def shapeModelTransformationView: TShapeModelTransformationView = tvview
+        override def meshView: TTriangleMeshView = tMeshView
+      }
+
       shapeModelTransformViewMap.update(tvview.id, ssmView.shapeModelTransformationView)
-      Future.value(tvview)
+      Future.value(tssmview)
 
     }
 

@@ -8,7 +8,8 @@ organization := "ch.unibas.cs.gravis"
 
 scalaVersion := "2.11.8"
 
-resolvers ++= Seq("scalismo (private)" at "https://statismo.cs.unibas.ch/repository/private")
+resolvers ++= Seq("scalismo (public)" at "https://statismo.cs.unibas.ch/repository/public",
+                  "scalismo (private)" at "https://statismo.cs.unibas.ch/repository/private")
 
 credentials += Credentials(Path.userHome / ".ivy2" / ".credentials-statismo-private")
 
