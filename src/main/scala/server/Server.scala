@@ -14,7 +14,7 @@ import scalismo.registration.{RigidTransformation, RotationTransform}
 import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess.Eigenpair
 import scalismo.statisticalmodel.{MultivariateNormalDistribution, DiscreteLowRankGaussianProcess, StatisticalMeshModel}
 import scalismo.ui.api._
-import thrift.{EulerTransform => TEulerTransform, Group => TGroup, Image => TImage, Point3D => TPoint3D, RigidTransformation => TRigidTransformation, ShapeModelTransformationView => TShapeModelTransformationView, ShapeTransformation => TShapeTransformation, StatisticalShapeModel => TStatisticalShapeModel, TranslationTransform => TTranslationTransform, TriangleMesh => TTriangleMesh, Landmark => TLandmark, ShapeModelView => TShapeModelView, Color => TColor, ImageView => TImageView, TriangleMeshView => TTriangleMeshView, Ui}
+//import thrift.{EulerTransform => TEulerTransform, Group => TGroup, Image => TImage, Point3D => TPoint3D, RigidTransformation => TRigidTransformation, ShapeModelTransformationView => TShapeModelTransformationView, ShapeTransformation => TShapeTransformation, StatisticalShapeModel => TStatisticalShapeModel, TranslationTransform => TTranslationTransform, TriangleMesh => TTriangleMesh, Landmark => TLandmark, ShapeModelView => TShapeModelView, Color => TColor, ImageView => TImageView, TriangleMeshView => TTriangleMeshView, Ui}
 
 import scala.collection.mutable
 
@@ -23,214 +23,94 @@ object FinagleThriftServerSampleApp extends App {
 
   val ui = ScalismoUI()
 
-  // maps group ids (here encoded as int) to Groups
-  val groupMap = mutable.HashMap[Int, Group]()
-  val shapeModelTransformViewMap = mutable.HashMap[Int, ShapeModelTransformationView]()
-  val meshViewMap = mutable.HashMap[Int, TriangleMeshView]()
-  val imageViewMap = mutable.HashMap[Int, ImageView]()
 
   // The server part is easy in this sample, so let's just
   // create a simple implementation
-  val service = new Ui[Future] {
+  val service = new thrift.Ui[Future] {
 
-
-
-    def meshViewtoThriftMeshView(id : Int, meshView : TriangleMeshView) : TTriangleMeshView = {
-      val assignedId = id
-
-      new TTriangleMeshView {
-        override def opacity: Double = meshView.opacity
-
-        override def color: TColor = new TColor {
-          val meshcolor = meshView.color
-          override def r: Int = meshcolor.getRed
-          override def b: Int = meshcolor.getBlue
-          override def g: Int = meshcolor.getGreen
-        }
-
-        override def id: Int = assignedId
-      }
-    }
-
-
-    override def showPointCloud(g : TGroup, p: Seq[TPoint3D], name : String): Future[Unit] = {
-      val uipts = p.map(tp => scalismo.geometry.Point3D(tp.x, tp.y, tp.z))
-
-      ui.show(groupMap(g.id), uipts.toIndexedSeq, name)
-      Future.value(())
-    }
-
-    override def showLandmark(g : TGroup, tlm: TLandmark, name : String): Future[Unit] = {
-      val pt = Point3D(tlm.point.x, tlm.point.y, tlm.point.z)
-
-      val pc1 = DenseVector.zeros[Double](3);
-      pc1(0) = tlm.uncertainty.principalAxis1.x;
-      pc1(1) = tlm.uncertainty.principalAxis1.y;
-      pc1(2) = tlm.uncertainty.principalAxis1.z;
-      val pc2 = DenseVector.zeros[Double](3);
-      pc2(0) = tlm.uncertainty.principalAxis2.x;
-      pc2(1) = tlm.uncertainty.principalAxis2.y;
-      pc2(2) = tlm.uncertainty.principalAxis2.z;
-      val pc3 = DenseVector.zeros[Double](3);
-      pc3(0) = tlm.uncertainty.principalAxis3.x;
-      pc3(1) = tlm.uncertainty.principalAxis3.y;
-      pc3(2) = tlm.uncertainty.principalAxis3.z;
-
-      val mean = DenseVector.zeros[Double](3)
-      val principalComponents =       Seq((pc1, tlm.uncertainty.variances.x),
-        (pc2, tlm.uncertainty.variances.y),
-      (pc3, tlm.uncertainty.variances.z))
-
-      val uncertainty = MultivariateNormalDistribution(mean, principalComponents)
-      val lm = Landmark(tlm.name, pt, None, Some(uncertainty))//p.map(tp => scalismo.geometry.Point3D(tp.x, tp.y, tp.z))
-
-      ui.show(groupMap(g.id),lm, name)
-      Future.value(())
-    }
-
-
-    override def showTriangleMesh(g : TGroup, m: TTriangleMesh, name : String): Future[TTriangleMeshView] = {
-      val pts = m.vertices.map(tp => scalismo.geometry.Point3D(tp.x, tp.y, tp.z))
-      val cells = m.topology.map(c => TriangleCell(PointId(c.id1), PointId(c.id2), PointId(c.id3)))
-      val mesh = TriangleMesh3D(UnstructuredPointsDomain(pts.toIndexedSeq), TriangleList(cells.toIndexedSeq))
-      val meshView = ui.show(groupMap(g.id), mesh, name)
-
-      val id: Int = (g.name + name).hashCode()
-
-      val tMeshView = meshViewtoThriftMeshView(id, meshView)
-      meshViewMap.update(id, meshView)
-
-      Future.value(tMeshView)
-    }
-
-    override def showImage(g : TGroup, img: TImage, name : String): Future[TImageView] = {
-      val origin = Point3D(img.domain.origin.x, img.domain.origin.y, img.domain.origin.z)
-      val size = IntVector3D(img.domain.size.i, img.domain.size.j, img.domain.size.k)
-      val spacing = Vector3D(img.domain.spacing.x, img.domain.spacing.y, img.domain.spacing.z)
-      val domain = DiscreteImageDomain(origin, spacing,size)
-      val values = img.data.toIndexedSeq
-      val discreteImage = DiscreteScalarImage(domain, values)
-      val imageView = ui.show(groupMap(g.id), discreteImage, name)
-
-      val assignedId: Int = (g.name + name).hashCode()
-
-      imageViewMap.update(assignedId, imageView)
-
-      val tImageView : TImageView = new TImageView {
-        override def level: Int = 10
-
-        override def window: Int = 10
-
-        override def id: Int = assignedId
-      }
-
-      Future.value(tImageView)
-    }
-
-    override def createGroup(name: String): Future[TGroup] = {
+    override def createGroup(name: String): Future[thrift.Group] = {
       val nameOuter = name
       val g = ui.createGroup(name)
-
-      val group = new TGroup {
-        override def id: Int = (name.hashCode % Int.MaxValue).toInt
-        override def name: String = nameOuter
-      }
-      groupMap.update(group.id, g)
-      print(groupMap.keys.toIndexedSeq)
-      println("return id " + group.id)
+      val group = GroupSerializer.toThrift(g)
       val v = Future.value(group)
       v
     }
 
-    override def showStatisticalShapeModel(g: TGroup, ssm: TStatisticalShapeModel, name: String): Future[TShapeModelView] = {
 
-      val pts = ssm.reference.vertices.map(tp => scalismo.geometry.Point3D(tp.x, tp.y, tp.z))
-      val cells = ssm.reference.topology.map(c => TriangleCell(PointId(c.id1), PointId(c.id2), PointId(c.id3)))
-      val refMesh = TriangleMesh3D(UnstructuredPointsDomain(pts.toIndexedSeq), TriangleList(cells.toIndexedSeq))
+    override def showPointCloud(g : thrift.Group, p: Seq[thrift.Point3D], name : String): Future[Unit] = {
 
-      val meanVec = DenseVector.zeros[Double](ssm.mean.size)
+      val uipts =  p.map(PointSerializer.fromThrift(_))
+      val group = GroupSerializer.fromThrift(g)
+      ui.show(group, uipts.toIndexedSeq, name)
+      Future.value(())
+    }
 
+    override def showLandmark(g : thrift.Group, tlm: thrift.Landmark, name : String): Future[Unit] = {
 
-      for (i <- 0 until meanVec.size) {
-        meanVec(i) = ssm.mean(i)
-      }
-      val eigenVals = ssm.klbasis.eigenvalues
-      val pcaMatrix = DenseMatrix.zeros[Double](meanVec.size, ssm.klbasis.eigenvectors.size)
-      for (i <- 0 until pcaMatrix.rows; j <- 0 until pcaMatrix.cols){
-        pcaMatrix(i,j) = ssm.klbasis.eigenvectors(j)(i)
-      }
+      val group  = GroupSerializer.fromThrift(g)
+      val lm = LandmarkSerializer.fromThrift(tlm)
 
-      val meanField = DiscreteVectorField.fromDenseVector[_3D, _3D](refMesh.pointSet, meanVec)
-      val eigenfuncs = for (i <- 0 until pcaMatrix.cols) yield {
-        DiscreteVectorField.fromDenseVector[_3D, _3D](refMesh.pointSet, pcaMatrix(::, i).toDenseVector)
-      }
-      val eigenPairs = eigenVals.zip(eigenfuncs).map{case (eigenVal, eigenFun) => Eigenpair(eigenVal, eigenFun)}
-      val dgp = DiscreteLowRankGaussianProcess(meanField,  eigenPairs)
+      ui.show(group,lm, name)
+      Future.value(())
+    }
 
 
-      val ssmView   = ui.show(groupMap(g.id), StatisticalMeshModel(refMesh, dgp), name)
+    override def showTriangleMesh(g : thrift.Group, m: thrift.TriangleMesh, name : String): Future[thrift.TriangleMeshView] = {
+
+      val group = GroupSerializer.fromThrift(g)
+      val mesh = TriangleMeshSerializer.fromThrift(m)
+      val meshView= ui.show(group, mesh, name)
+
+      val tMeshView : thrift.TriangleMeshView= TriangleMeshViewSerializer.toThrift(meshView)
+
+      Future.value(tMeshView)
+    }
+
+    override def showImage(g : thrift.Group, thriftImg: thrift.Image, name : String): Future[thrift.ImageView] = {
+      val group = GroupSerializer.fromThrift(g)
+      val discreteImage = ImageSerializer.fromThrift(thriftImg)
+      val imageView = ui.show(group, discreteImage, name)
+
+      val tImageView = ImageViewSerializer.toThrift(imageView)
+
+      Future.value(tImageView)
+    }
 
 
-      val tvview : TShapeModelTransformationView = new TShapeModelTransformationView {
-        override def id: Int = (g.name + name).hashCode()
+    override def showStatisticalShapeModel(g: thrift.Group, tssm: thrift.StatisticalShapeModel, name: String): Future[thrift.ShapeModelView] = {
 
-        override def poseTransformation: TRigidTransformation = {
-          new TRigidTransformation {
-            override def rotation: TEulerTransform = new TEulerTransform {
-              // we have rotation around z, y, x in scalismo
-              override def angleX: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.parameters(2)
-              override def angleY: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.parameters(1)
-              override def angleZ: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.parameters(0)
 
-              override def center: TPoint3D = new TPoint3D {
-                override def x: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.center.x
-                override def y: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.center.y
-                override def z: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.rotation.center.z
-              }
-            }
-            override def translation: TTranslationTransform = new TTranslationTransform {
-              override def x: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.translation.parameters(0)
-              override def y: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.translation.parameters(1)
-              override def z: Double = ssmView.shapeModelTransformationView.poseTransformationView.transformation.translation.parameters(2)
-            }
-          }
-        }
-
-        override def shapeTransformation: TShapeTransformation = new TShapeTransformation {
-          override def coefficients: Seq[Double] = ssmView.shapeModelTransformationView.shapeTransformationView.coefficients.toArray.toSeq
-        }
-      }
+      val group = GroupSerializer.fromThrift(g)
+      val ssm = ShapeModelSerializer.fromThrift(tssm)
+      val ssmView   = ui.show(group, ssm, name)
 
       val meshId: Int = (g.name + name).hashCode()
 
-      val tMeshView = meshViewtoThriftMeshView(meshId, ssmView.meshView)
-      meshViewMap.update(meshId, ssmView.meshView)
+      val tssmview = ShapeModelViewSerializer.toThrift(ssmView)
 
-
-      val tssmview : TShapeModelView = new TShapeModelView {
-        override def shapeModelTransformationView: TShapeModelTransformationView = tvview
-        override def meshView: TTriangleMeshView = tMeshView
-      }
-
-      shapeModelTransformViewMap.update(tvview.id, ssmView.shapeModelTransformationView)
       Future.value(tssmview)
 
     }
 
-    override def updateShapeModelTransformation(smtv: TShapeModelTransformationView): Future[Unit] = {
-      val shapeModelTransformView = shapeModelTransformViewMap(smtv.id)
-      shapeModelTransformView.shapeTransformationView.coefficients = DenseVector(smtv.shapeTransformation.coefficients.toArray)
-      val center : scalismo.geometry.Point3D = Point3D(smtv.poseTransformation.rotation.center.x,smtv.poseTransformation.rotation.center.y, smtv.poseTransformation.rotation.center.z)
-      // the rotation parameters are ordered z y x in scalismo
-      val rotation = RotationTransform(smtv.poseTransformation.rotation.angleZ,smtv.poseTransformation.rotation.angleY, smtv.poseTransformation.rotation.angleX, centre = center)
-      println("translation: " + smtv.poseTransformation.translation)
-      val translation = registration.TranslationTransform(Vector3D(smtv.poseTransformation.translation.x, smtv.poseTransformation.translation.y, smtv.poseTransformation.translation.z))
-      val rigidTransformation = RigidTransformation(translation, rotation)
-      shapeModelTransformView.poseTransformationView.transformation = rigidTransformation;
+    override def updateShapeModelTransformation(tsmtv: thrift.ShapeModelTransformationView): Future[Unit] = {
+
+      val shapeModelTransformView = ShapeModelTransformViewSerializer.fromThrift(tsmtv)
 
       Future.value(())
     }
+
+    override def updateTriangleMeshView(tvm: thrift.TriangleMeshView): Future[Unit] = {
+      val tvt = TriangleMeshViewSerializer.fromThrift(tvm)
+      Future.value(())
+    }
+
+    override def updateImageView(iv: thrift.ImageView): Future[Unit] = {
+      val imgv = ImageViewSerializer.fromThrift(iv)
+      Future.value(())
+    }
   }
+
+
 
   // Run the service implemented on the port 8080
   val server = Thrift.serveIface(":8000", service)

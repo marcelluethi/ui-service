@@ -147,8 +147,8 @@ service UI {
   void showLandmark(1 : Group g, 2 : Landmark landmark, 3 : string name);
   ShapeModelView showStatisticalShapeModel(1 : Group g, 2:StatisticalShapeModel ssm, 3:string name);
   void updateShapeModelTransformation(1: ShapeModelTransformationView smtv);
-
-
+  void updateTriangleMeshView(1: TriangleMeshView tvm);
+  void updateImageView(1 : ImageView iv);
 }
 
 
