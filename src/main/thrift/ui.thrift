@@ -152,6 +152,11 @@ service UI {
   void updateShapeModelTransformation(1: ShapeModelTransformationView smtv);
   void updateTriangleMeshView(1: TriangleMeshView tvm);
   void updateImageView(1 : ImageView iv);
+  void removeGroup(1: Group g);
+  void removeImage(1: ImageView iv);
+  void removeTriangleMesh(1: TriangleMeshView tmv);
+  void removeShapeModelTransformation(1: ShapeModelTransformationView smv);
+  void removeShapeModel(1: ShapeModelView smv);
 }
 
 

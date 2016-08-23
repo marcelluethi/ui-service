@@ -16,6 +16,7 @@ import scalismo.registration.{RigidTransformation, RotationTransform}
 import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess.Eigenpair
 import scalismo.statisticalmodel.{StatisticalMeshModel, DiscreteLowRankGaussianProcess, MultivariateNormalDistribution}
 import scalismo.ui.api._
+import thrift.ShapeModelView
 
 import scala.collection.mutable
 
@@ -24,27 +25,48 @@ trait Serialize[S, T] {
 
   def toThrift (o : S) : T
   def fromThrift(o : T) : S
+
 }
 
+trait ViewMapper[S <: ObjectView, T] {
 
-object GroupSerializer extends Serialize[Group, thrift.Group] {
 
-  // maps group ids (here encoded as int) to Groups
-  val groupMap = mutable.HashMap[Int, Group]()
+  val viewMap = mutable.HashMap[Int, S]()
+
+  def genId(view : S): Int = {
+    (view.inGroup.name + view.name + scala.util.Random.nextInt()).hashCode
+  }
+
+  def toThrift (o : S) : T
+  def updateFromThrift(o : T) : S
+  def remove(t : T) : Unit
+
+  protected def removeObject(id : Int): Unit = {
+    viewMap.get(id).foreach {group =>
+      viewMap.remove(id)
+      group.remove()
+    }
+  }
+}
+
+object GroupSerializer extends ViewMapper[Group, thrift.Group] {
+
 
     override def toThrift(g: Group): thrift.Group = {
       val group = new thrift.Group {
         override def id: Int = (name.hashCode % Int.MaxValue).toInt
         override def name: String = g.name
       }
-      groupMap.update(group.id, g)
+      viewMap.update(group.id, g)
 
       group
     }
 
-    override def fromThrift(thriftGroup: thrift.Group): Group = {
-      groupMap(thriftGroup.id)
+    override def updateFromThrift(thriftGroup: thrift.Group): Group = {
+      viewMap(thriftGroup.id)
     }
+
+    override def remove(t: thrift.Group): Unit = removeObject(t.id)
 }
 
 object PointSerializer extends Serialize[Point3D, thrift.Point3D] {
@@ -53,6 +75,8 @@ object PointSerializer extends Serialize[Point3D, thrift.Point3D] {
   override def fromThrift(thriftPoint: thrift.Point3D): Point3D = {
     scalismo.geometry.Point3D(thriftPoint.x, thriftPoint.y, thriftPoint.z)
   }
+
+
 }
 
 
@@ -167,16 +191,15 @@ object ShapeModelSerializer extends Serialize[StatisticalMeshModel, thrift.Stati
   }
 }
 
-object TriangleMeshViewSerializer extends Serialize[TriangleMeshView, thrift.TriangleMeshView] {
+object TriangleMeshViewSerializer extends ViewMapper[TriangleMeshView, thrift.TriangleMeshView] {
 
-  val meshViewMap = mutable.HashMap[Int, TriangleMeshView]()
 
 
   override def toThrift(meshView: TriangleMeshView): thrift.TriangleMeshView = {
 
-    val assignedId: Int = (meshView.inGroup.name + meshView.name).hashCode
+    val assignedId: Int = genId(meshView)
 
-    meshViewMap.update(assignedId, meshView)
+    viewMap.update(assignedId, meshView)
     println("updated map with id " + assignedId)
     new thrift.TriangleMeshView {
       override def opacity: Double = meshView.opacity
@@ -196,26 +219,27 @@ object TriangleMeshViewSerializer extends Serialize[TriangleMeshView, thrift.Tri
 
   }
 
-  override def fromThrift(o: thrift.TriangleMeshView): TriangleMeshView = {
+  override def updateFromThrift(o: thrift.TriangleMeshView): TriangleMeshView = {
     println("retrieve view with id " + o.id)
-    val meshView = meshViewMap(o.id)
+    val meshView = viewMap(o.id)
     meshView.color = new Color(o.color.r, o.color.g, o.color.b)
     meshView.lineWidth = o.lineWidth
     meshView.opacity = o.opacity
     meshView
   }
+
+  override def remove(t: thrift.TriangleMeshView): Unit = removeObject(t.id)
 }
 
 
-object ImageViewSerializer extends Serialize[ImageView, thrift.ImageView] {
+object ImageViewSerializer extends ViewMapper[ImageView, thrift.ImageView] {
 
-  val imageViewMap = mutable.HashMap[Int, ImageView]()
 
 
   override def toThrift(imgView: ImageView): thrift.ImageView = {
-    val assignedId: Int = (imgView.inGroup.name + imgView.name).hashCode
-    if (!imageViewMap.contains(assignedId)) {
-      imageViewMap.update(assignedId, imgView)
+    val assignedId: Int =  genId(imgView)
+    if (!viewMap.contains(assignedId)) {
+      viewMap.update(assignedId, imgView)
     }
 
 
@@ -232,21 +256,23 @@ object ImageViewSerializer extends Serialize[ImageView, thrift.ImageView] {
     tImageView
   }
 
-  override def fromThrift(o: thrift.ImageView): ImageView = {
-    val imageView = imageViewMap.get(o.id).get
+  override def updateFromThrift(o: thrift.ImageView): ImageView = {
+    val imageView = viewMap.get(o.id).get
     imageView.level = o.level
     imageView.window = o.window
     imageView.opacity = o.opacity
     imageView
   }
+
+  override def remove(t: thrift.ImageView): Unit = removeObject(t.id)
 }
 
-object ShapeModelTransformViewSerializer extends Serialize[ShapeModelTransformationView, thrift.ShapeModelTransformationView] {
+object ShapeModelTransformViewSerializer extends ViewMapper[ShapeModelTransformationView, thrift.ShapeModelTransformationView] {
 
   val shapeModelTransformViewMap = mutable.HashMap[Int, ShapeModelTransformationView]()
 
   override def toThrift(smtv: ShapeModelTransformationView): thrift.ShapeModelTransformationView = {
-    val assignedId: Int = (smtv.inGroup.name + smtv.name).hashCode
+    val assignedId: Int =  genId(smtv)
 
     if (!shapeModelTransformViewMap.contains(assignedId)) {
       shapeModelTransformViewMap.update(assignedId, smtv)
@@ -293,7 +319,7 @@ object ShapeModelTransformViewSerializer extends Serialize[ShapeModelTransformat
     tvview
   }
 
-   override def fromThrift(smtv: thrift.ShapeModelTransformationView): ShapeModelTransformationView = {
+   override def updateFromThrift(smtv: thrift.ShapeModelTransformationView): ShapeModelTransformationView = {
 
      val shapeModelTransformView = shapeModelTransformViewMap.get(smtv.id).get
      shapeModelTransformView.shapeTransformationView.coefficients = DenseVector(smtv.shapeTransformation.coefficients.toArray)
@@ -308,14 +334,14 @@ object ShapeModelTransformViewSerializer extends Serialize[ShapeModelTransformat
      shapeModelTransformView
 
    }
+
+  override def remove(t: thrift.ShapeModelTransformationView): Unit = removeObject(t.id)
 }
 
 
-object ShapeModelViewSerializer extends Serialize[StatisticalMeshModelViewControls, thrift.ShapeModelView] {
+object ShapeModelViewSerializer  {
 
-  override def toThrift(ssmView: StatisticalMeshModelViewControls): thrift.ShapeModelView = {
-
-
+  def toThrift(ssmView: StatisticalMeshModelViewControls): thrift.ShapeModelView = {
 
       val tMeshView = TriangleMeshViewSerializer.toThrift(ssmView.meshView)
       val tssmv = ShapeModelTransformViewSerializer.toThrift(ssmView.shapeModelTransformationView)
@@ -329,6 +355,9 @@ object ShapeModelViewSerializer extends Serialize[StatisticalMeshModelViewContro
     tssmview
   }
 
-  override def fromThrift(ssmView: thrift.ShapeModelView): StatisticalMeshModelViewControls = ???
 
+  def remove(t: ShapeModelView): Unit = {
+    TriangleMeshViewSerializer.remove(t.meshView)
+    ShapeModelTransformViewSerializer.remove(t.shapeModelTransformationView)
+  }
 }

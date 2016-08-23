@@ -14,6 +14,8 @@ import scalismo.registration.{RigidTransformation, RotationTransform}
 import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess.Eigenpair
 import scalismo.statisticalmodel.{MultivariateNormalDistribution, DiscreteLowRankGaussianProcess, StatisticalMeshModel}
 import scalismo.ui.api._
+import thrift.ShapeModelView
+
 //import thrift.{EulerTransform => TEulerTransform, Group => TGroup, Image => TImage, Point3D => TPoint3D, RigidTransformation => TRigidTransformation, ShapeModelTransformationView => TShapeModelTransformationView, ShapeTransformation => TShapeTransformation, StatisticalShapeModel => TStatisticalShapeModel, TranslationTransform => TTranslationTransform, TriangleMesh => TTriangleMesh, Landmark => TLandmark, ShapeModelView => TShapeModelView, Color => TColor, ImageView => TImageView, TriangleMeshView => TTriangleMeshView, Ui}
 
 import scala.collection.mutable
@@ -40,14 +42,14 @@ object FinagleThriftServerSampleApp extends App {
     override def showPointCloud(g : thrift.Group, p: Seq[thrift.Point3D], name : String): Future[Unit] = {
 
       val uipts =  p.map(PointSerializer.fromThrift(_))
-      val group = GroupSerializer.fromThrift(g)
+      val group = GroupSerializer.updateFromThrift(g)
       ui.show(group, uipts.toIndexedSeq, name)
       Future.value(())
     }
 
     override def showLandmark(g : thrift.Group, tlm: thrift.Landmark, name : String): Future[Unit] = {
 
-      val group  = GroupSerializer.fromThrift(g)
+      val group  = GroupSerializer.updateFromThrift(g)
       val lm = LandmarkSerializer.fromThrift(tlm)
 
       ui.show(group,lm, name)
@@ -57,7 +59,7 @@ object FinagleThriftServerSampleApp extends App {
 
     override def showTriangleMesh(g : thrift.Group, m: thrift.TriangleMesh, name : String): Future[thrift.TriangleMeshView] = {
 
-      val group = GroupSerializer.fromThrift(g)
+      val group = GroupSerializer.updateFromThrift(g)
       val mesh = TriangleMeshSerializer.fromThrift(m)
       val meshView= ui.show(group, mesh, name)
 
@@ -67,7 +69,7 @@ object FinagleThriftServerSampleApp extends App {
     }
 
     override def showImage(g : thrift.Group, thriftImg: thrift.Image, name : String): Future[thrift.ImageView] = {
-      val group = GroupSerializer.fromThrift(g)
+      val group = GroupSerializer.updateFromThrift(g)
       val discreteImage = ImageSerializer.fromThrift(thriftImg)
       val imageView = ui.show(group, discreteImage, name)
 
@@ -80,7 +82,7 @@ object FinagleThriftServerSampleApp extends App {
     override def showStatisticalShapeModel(g: thrift.Group, tssm: thrift.StatisticalShapeModel, name: String): Future[thrift.ShapeModelView] = {
 
 
-      val group = GroupSerializer.fromThrift(g)
+      val group = GroupSerializer.updateFromThrift(g)
       val ssm = ShapeModelSerializer.fromThrift(tssm)
       val ssmView   = ui.show(group, ssm, name)
 
@@ -94,18 +96,40 @@ object FinagleThriftServerSampleApp extends App {
 
     override def updateShapeModelTransformation(tsmtv: thrift.ShapeModelTransformationView): Future[Unit] = {
 
-      val shapeModelTransformView = ShapeModelTransformViewSerializer.fromThrift(tsmtv)
+      val shapeModelTransformView = ShapeModelTransformViewSerializer.updateFromThrift(tsmtv)
 
       Future.value(())
     }
 
     override def updateTriangleMeshView(tvm: thrift.TriangleMeshView): Future[Unit] = {
-      val tvt = TriangleMeshViewSerializer.fromThrift(tvm)
+      val tvt = TriangleMeshViewSerializer.updateFromThrift(tvm)
       Future.value(())
     }
 
     override def updateImageView(iv: thrift.ImageView): Future[Unit] = {
-      val imgv = ImageViewSerializer.fromThrift(iv)
+      val imgv = ImageViewSerializer.updateFromThrift(iv)
+      Future.value(())
+    }
+
+    override def removeGroup(g: thrift.Group): Future[Unit] = {
+      Future.value(GroupSerializer.remove(g))
+    }
+
+    override def removeTriangleMesh(tmv: thrift.TriangleMeshView): Future[Unit] = {
+      Future.value(TriangleMeshViewSerializer.remove(tmv))
+    }
+
+    override def removeImage(iv: thrift.ImageView): Future[Unit] = {
+      Future.value(ImageViewSerializer.remove(iv))
+    }
+
+    override def removeShapeModelTransformation(smv: thrift.ShapeModelTransformationView): Future[Unit] = {
+      Future.value(ShapeModelTransformViewSerializer.remove(smv))
+    }
+
+    override def removeShapeModel(smv: ShapeModelView): Future[Unit] = {
+      removeTriangleMesh(smv.meshView)
+      removeShapeModelTransformation(smv.shapeModelTransformationView)
       Future.value(())
     }
   }
