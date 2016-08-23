@@ -52,9 +52,9 @@ struct TriangleCell {
 }
 
 struct Color {
-    1: required i32 r;
-    2: required i32 g;
-    3: required i32 b;
+    1: required i16 r;
+    2: required i16 g;
+    3: required i16 b;
 }
 
 
@@ -69,7 +69,9 @@ struct TriangleMesh {
 struct TriangleMeshView {
     1: required  i32 id;
     2: required Color color;
+    3: required i32 lineWidth;
     4: required double opacity;
+
 }
 
 struct ImageDomain {
@@ -87,8 +89,9 @@ struct Image {
 
 struct ImageView {
     1: required i32 id;
-    2: required i32 window;
-    3: required i32 level;
+    2: required double window;
+    3: required double level;
+    4: required double opacity;
 }
 
 

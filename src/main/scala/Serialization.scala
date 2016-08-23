@@ -183,12 +183,14 @@ object TriangleMeshViewSerializer extends Serialize[TriangleMeshView, thrift.Tri
 
       override def color: thrift.Color = new thrift.Color {
         val meshcolor = meshView.color
-        override def r: Int = meshcolor.getRed
-        override def b: Int = meshcolor.getBlue
-        override def g: Int = meshcolor.getGreen
+        override def r: Short = meshcolor.getRed.toShort
+        override def b: Short = meshcolor.getBlue.toShort
+        override def g: Short = meshcolor.getGreen.toShort
       }
 
       override def id: Int = assignedId
+
+      override def lineWidth: Int = meshView.lineWidth
     }
 
 
@@ -198,7 +200,7 @@ object TriangleMeshViewSerializer extends Serialize[TriangleMeshView, thrift.Tri
     println("retrieve view with id " + o.id)
     val meshView = meshViewMap(o.id)
     meshView.color = new Color(o.color.r, o.color.g, o.color.b)
-    println("retrieved color " + meshView.color)
+    meshView.lineWidth = o.lineWidth
     meshView.opacity = o.opacity
     meshView
   }
@@ -218,9 +220,11 @@ object ImageViewSerializer extends Serialize[ImageView, thrift.ImageView] {
 
 
     val tImageView : thrift.ImageView = new thrift.ImageView {
-      override def level: Int = 10
+      override def level: Double = imgView.level
 
-      override def window: Int = 10
+      override def window: Double = imgView.window
+
+      override def opacity : Double = imgView.opacity
 
       override def id: Int = assignedId
     }
@@ -230,6 +234,9 @@ object ImageViewSerializer extends Serialize[ImageView, thrift.ImageView] {
 
   override def fromThrift(o: thrift.ImageView): ImageView = {
     val imageView = imageViewMap.get(o.id).get
+    imageView.level = o.level
+    imageView.window = o.window
+    imageView.opacity = o.opacity
     imageView
   }
 }
