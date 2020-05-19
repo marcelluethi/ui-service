@@ -7,14 +7,14 @@ package server
 import java.awt.Color
 
 import breeze.linalg.{DenseMatrix, DenseVector}
-import scalismo.common.{DiscreteVectorField, UnstructuredPointsDomain, PointId}
+import scalismo.common.{DiscreteField, DiscreteVectorField, PointId, UnstructuredPointsDomain}
 import scalismo.geometry._
-import scalismo.image.{DiscreteScalarImage, DiscreteImageDomain}
-import scalismo.mesh.{TriangleList, TriangleMesh3D, TriangleCell, TriangleMesh}
+import scalismo.image.{DiscreteImageDomain, DiscreteScalarImage}
+import scalismo.mesh.{TriangleCell, TriangleList, TriangleMesh, TriangleMesh3D}
 import scalismo.registration
 import scalismo.registration.{RigidTransformation, RotationTransform}
 import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess.Eigenpair
-import scalismo.statisticalmodel.{StatisticalMeshModel, DiscreteLowRankGaussianProcess, MultivariateNormalDistribution}
+import scalismo.statisticalmodel.{DiscreteLowRankGaussianProcess, MultivariateNormalDistribution, StatisticalMeshModel}
 import scalismo.ui.api._
 import thrift.ShapeModelView
 
@@ -80,11 +80,11 @@ object PointSerializer extends Serialize[Point3D, thrift.Point3D] {
 }
 
 
-object VectorSerializer extends Serialize[Vector3D, thrift.Vector3D] {
-  override def toThrift(o: Vector3D): thrift.Vector3D = ???
+object VectorSerializer extends Serialize[EuclideanVector[_3D], thrift.Vector3D] {
+  override def toThrift(o: EuclideanVector[_3D]): thrift.Vector3D = ???
 
-  override def fromThrift(tv: thrift.Vector3D): Vector3D = {
-    Vector3D(tv.x, tv.y, tv.z)
+  override def fromThrift(tv: thrift.Vector3D): EuclideanVector[_3D] = {
+    EuclideanVector3D(tv.x, tv.y, tv.z)
   }
 }
 
@@ -178,9 +178,9 @@ object ShapeModelSerializer extends Serialize[StatisticalMeshModel, thrift.Stati
       pcaMatrix(i,j) = ssm.klbasis.eigenvectors(j)(i)
     }
 
-    val meanField = DiscreteVectorField.fromDenseVector[_3D, _3D](refMesh.pointSet, meanVec)
+    val meanField = DiscreteVectorField.fromDenseVector[_3D, UnstructuredPointsDomain[_3D], _3D](refMesh.pointSet, meanVec)
     val eigenfuncs = for (i <- 0 until pcaMatrix.cols) yield {
-      DiscreteVectorField.fromDenseVector[_3D, _3D](refMesh.pointSet, pcaMatrix(::, i).toDenseVector)
+      DiscreteVectorField.fromDenseVector[_3D, UnstructuredPointsDomain[_3D], _3D](refMesh.pointSet, pcaMatrix(::, i).toDenseVector)
     }
     val eigenPairs = eigenVals.zip(eigenfuncs).map{case (eigenVal, eigenFun) => Eigenpair(eigenVal, eigenFun)}
     val dgp = DiscreteLowRankGaussianProcess(meanField,  eigenPairs)
@@ -328,7 +328,7 @@ object ShapeModelTransformViewSerializer extends ViewMapper[ShapeModelTransforma
      // the rotation parameters are ordered z y x in scalismo
      val rotation = RotationTransform(smtv.poseTransformation.rotation.angleZ, smtv.poseTransformation.rotation.angleY, smtv.poseTransformation.rotation.angleX, centre = center)
 
-     val translation = registration.TranslationTransform(Vector3D(smtv.poseTransformation.translation.x, smtv.poseTransformation.translation.y, smtv.poseTransformation.translation.z))
+     val translation = registration.TranslationTransform(EuclideanVector3D(smtv.poseTransformation.translation.x, smtv.poseTransformation.translation.y, smtv.poseTransformation.translation.z))
      val rigidTransformation = RigidTransformation(translation, rotation)
      shapeModelTransformView.poseTransformationView.transformation = rigidTransformation;
      shapeModelTransformView

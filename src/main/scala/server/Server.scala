@@ -1,7 +1,6 @@
 package server
 
 import breeze.linalg.{DenseMatrix, DenseVector}
-import com.twitter.finagle.ListeningServer
 import com.twitter.finagle.Thrift
 import com.twitter.util.{Await, Future, Promise}
 import org.apache.commons.math3.geometry.euclidean.threed.PolyhedronsSet.TranslationTransform
@@ -12,7 +11,7 @@ import scalismo.mesh._
 import scalismo.registration
 import scalismo.registration.{RigidTransformation, RotationTransform}
 import scalismo.statisticalmodel.DiscreteLowRankGaussianProcess.Eigenpair
-import scalismo.statisticalmodel.{MultivariateNormalDistribution, DiscreteLowRankGaussianProcess, StatisticalMeshModel}
+import scalismo.statisticalmodel.{DiscreteLowRankGaussianProcess, MultivariateNormalDistribution, StatisticalMeshModel}
 import scalismo.ui.api._
 import thrift.ShapeModelView
 
@@ -137,7 +136,7 @@ object FinagleThriftServerSampleApp extends App {
 
 
   // Run the service implemented on the port 8080
-  val server = Thrift.serveIface(":8000", service)
+  val server = Thrift.server.serveIface(":8000", service)
 
   // Keep waiting for the server and prevent the java process to exit
   // Q: What happens if we remove the await ?
